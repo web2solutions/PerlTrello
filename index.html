@@ -1,0 +1,1475 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>PerlTrello</title>
+
+
+<link  rel="stylesheet" type="text/css" href="../codebase3.5/dhtmlx.css" />
+<script src="../codebase3.5/dhtmlx.js"></script>
+
+
+
+<script type="text/javascript" src="../CAIRS_Framework/CAIRS_fw.js"></script>
+
+
+<script src="http://code.jquery.com/jquery-1.7.1.min.js"></script>
+<script src="epiceditor.min.js"></script>
+<script src="https://api.trello.com/1/client.js?key=f7445919a9537828fa2758a3bff25286"></script>
+
+<style>
+	html, body{
+		width:100%; 
+		height:100%;
+		background:#E5E5E5;
+		font-family:Arial, Helvetica, sans-serif;
+		font-size:11px;
+	}
+	#layout_patterns_images img{ cursor:pointer}
+	#code_wrapper{overflow:auto}
+	.button_select{
+		border-radius:6px;
+		border: #ffb552 1px solid; 
+		background-image: url(../codebase3.5/imgs/dhx_skyblue/dhx_skyblue_top.gif);
+		background-position:-50px -5px;
+		width:100px;
+		padding-left:5px;
+		padding-right:5px;
+		padding-top:3px;
+		height:22px;
+		position:relative
+	}
+	.button_select img{
+		poition:absolute;
+	}
+	
+	#loggedout {
+    text-align: center;
+    font-size: 20px;
+    padding-top: 30px;
+}
+#loggedin { 
+    display: none; 
+}
+
+#header {
+    padding: 4px;
+    border-bottom: 1px solid #000;
+    background: #eee;
+}
+
+#output {
+    padding: 4px;
+}
+
+.card { 
+    display: block; 
+    padding: 2px;
+    cursor: pointer;
+}
+
+#status_info{
+	float:left;
+}
+#user_info{
+	float:right;
+	width:180px;
+	height:20px;
+	padding-left:20px;
+	position:relative;
+}
+
+#user_info img{
+	position:absolute;
+	left:1px;
+	top:3px;
+}
+#cards_info{
+	float:right;
+	width:150px;
+	height:20px;
+	border-right:1px solid #ccc;
+	margin-right:1px;
+	padding-left:1px;
+}
+
+.board_info{
+	float:right;
+	width:126px;
+	height:20px;
+	border-right:1px solid #ccc;
+	border-left:1px solid #F5F5F5;
+	padding-left:24px;
+	margin-top:1px;
+	color:#666;
+	position:relative;
+}
+.board_info img{
+	position:absolute;
+	left:2px;
+	top:3px;
+}
+
+.card_description{
+	width:auto;
+	height:100%;
+	overflow:auto;
+	background-color:#EAEAFF;
+	padding-left:4px;
+	padding-right:4px;
+	font-size:12px;
+}
+div.comment{
+	width:auto;
+	height:100%;
+	overflow:auto;
+	padding-left:4px;
+	padding-right:4px;
+	font-size:12px;
+	white-space: pre;
+}
+</style>
+<script>
+
+var PerlTrello_Model = 
+{
+	tree : {id:'0', item:[
+			{id:'allBoards',  text:'Cards per boards', open : 0, select : 0, item:[
+			]},
+			{id:'myTrello',  text:'My Cards', open : 0, select : 1, item:[
+			]}
+			,{id:'allUsers',  text:'Cards per users', open : 0, select : 1, item:[
+			]}
+	]}
+	
+	,globalImgPath : "http://cdmap01.myadoptionportal.com/modules/codebase3.5/imgs/" // not mandatory, default "../codebase3.5/imgs/"
+	,globalSkin : "dhx_skyblue" // not mandatory, default "dhx_skyblue"
+	
+	// configuration layout
+   ,layout: {
+        pattern : '2U'
+    }
+	
+	,grid_cards : { 
+		headers : "Card,Board,Done"
+		,ids : "name,idBoard,done"
+		,widths : "300,200,100"
+		,colaligns : "left,left,right"
+		,coltypes : "ro,ro,ro"
+		,colsorting : "str,str,str"
+	}
+	,grid_boards : { 
+		headers : "Card,Description,Last activity,List,Done,Open"
+		,subHeaders : "#text_search,&nbsp;,&nbsp;,&nbsp;,&nbsp;,&nbsp;"
+		,ids : "name,desc,dateLastActivity,lists,done,shortUrl"
+		,widths : "400,0,130,100,40,0"
+		,colaligns : "left,left,right,right,center,right"
+		,coltypes : "ro,txt,dhxCalendar,ed,ro,link"
+		,colsorting : "str,str,date,str,str,str"
+	}
+	
+	,grid_comments : { 
+		headers : "Comment,User,Date"
+		,ids : "comment,user,date"
+		,widths : "300,150,90"
+		,colaligns : "left,left,right"
+		,coltypes : "ro,txt,dhxCalendar"
+		,colsorting : "str,str,date"
+	}
+	
+	
+	,conf_toolbarBoards : {
+		icon_path: ""
+		,items: [
+			{
+				type: "text",
+				id: "text1",
+				text: "title: ",
+			},{
+				type: "buttonInput",
+				width : 120,
+				id: "text"
+				//disabled : true
+			},{
+				type: "text",
+				id: "text1",
+				text: "description: ",
+			}
+			,{
+				type: "buttonInput",
+				width : 120,
+				id: "text_desc"
+				//disabled : true
+			}
+			,{
+				type: "button",
+				id: "search",
+				text: "search",
+				img: "filter.gif",
+				img_disabled: "filter.gif"
+				//,disabled : true
+			},
+			{
+				type: "separator",
+				id: "sep2",
+				
+			},{
+				type: "buttonSelect",
+				id: "listonly",
+				text: "List only",
+				openAll : true,
+				//img: "print.gif",
+				//img_disabled: "print_dis.gif",
+				options: [
+					{
+						id: "todo",
+						type: "obj",
+						text: "To do",
+						img: "todo.png"
+					}, {
+						id: "doing",
+						type: "obj",
+						text: "Doing",
+						img: 'doing.png'
+					}, {
+						id: "done",
+						type: "obj",
+						text: "Done",
+						img: 'done.png'
+					}, {
+						id: "nottracked",
+						type: "obj",
+						text: "Not tracked",
+						img: 'notes.png'
+					}, {
+						id: "allcards",
+						type: "obj",
+						text: "All cards",
+						img: "cards.png"
+					}
+				]
+            },
+			{
+				type: "separator",
+				id: "sep3",
+				
+			}
+			,{
+				type: "button",
+				id: "view",
+				text: "view at Trello",
+				img: "view.png",
+				img_disabled: "view_dis.png"
+				,disabled : true
+			}
+		]
+	}
+	
+	,conf_toolbarComment : {
+		icon_path: ""
+		,items: [
+			{
+				type: "button",
+				id: "post",
+				text: "post comment",
+				img: "confirmation.png",
+				img_disabled: "confirmation_dis.png"
+				//,disabled : true
+			},{
+				type: "separator",
+				id: "sep1",
+				
+			},
+			{
+				type: "text",
+				id: "text1",
+				text: " &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; post your comment here",
+			}
+		]
+	}
+	
+	,conf_form : {
+		template : [
+			{type: "settings", labelWidth: 0, offsetLeft: 0, inputWidth: 500, position:"label-right", offsetTop: 0},
+			{
+				type: "input",
+				//label: "Command line options",
+				rows: 5,
+				value: "-vf crop=618:526:0:14,pp=lb"
+			}
+		]	
+	}
+}
+
+
+
+
+
+var updateLoggedIn = function() {
+    var isLoggedIn = Trello.authorized();
+    $("#loggedout").toggle(!isLoggedIn);
+    $("#loggedin").toggle(isLoggedIn);        
+};
+    
+var logout = function() {
+    Trello.deauthorize();
+    updateLoggedIn();
+};
+                          
+
+var getComputedDisplay = (typeof window.getComputedStyle != "undefined") ?
+    function(el) {
+        return window.getComputedStyle(el, null).display;
+    } :
+    function(el) {
+        return el.currentStyle.display;
+    };
+
+function replaceWithOwnChildren(el) {
+    var parent = el.parentNode;
+    while (el.hasChildNodes()) {
+        parent.insertBefore(el.firstChild, el);
+    }
+    parent.removeChild(el);
+}
+
+
+function removeSelectionFormatting() {
+    var sel = rangy.getSelection();
+       
+    if (!sel.isCollapsed) {
+        for (var i = 0, range; i < sel.rangeCount; ++i) {
+            range = sel.getRangeAt(i);
+            
+            // Split partially selected nodes 
+            range.splitBoundaries();
+            
+            // Get formatting elements. For this example, we'll count any
+            // element with display: inline, except <br>s.
+            var formattingEls = range.getNodes([1], function(el) {
+                return el.tagName != "BR" && getComputedDisplay(el) == "inline";
+            });
+            
+            // Remove the formatting elements
+            for (var i = 0, el; el = formattingEls[i++]; ) {
+                replaceWithOwnChildren(el);
+            }
+        }
+    }
+}
+
+var PerlTrello = 
+{
+	fullname : null
+	
+	,onAuthorize : function()
+	{
+
+		
+		Trello.members.get("me", function(member)
+		{
+			//self.status_bar.setText("Authorized as " + member.fullName);
+			self._setStatus("Authorized as " + member.fullName);
+			self._setStatusUser("<img src='icons/online.png' /> User: " + member.fullName);
+			PerlTrello.ui.getBoards(function()
+			{
+				//self = PerlTrello.ui;
+				PerlTrello.ui.getUsers(function()
+				{
+					PerlTrello.ui._tabbar();
+					PerlTrello.ui._tree();
+					PerlTrello.fullname = member.fullName;
+		
+					document.title = "PerlTrello - " + member.fullName;
+					self.layout.cells("a").setText("PerlTrello - " + member.fullName);
+						
+					self.myTrello_layout.cells("a").setText("Cards assigned to me. Logged as " + member.fullName);
+					self._progressOff();
+				});
+			});
+		});
+	}
+	
+	,ui : {
+		model : null
+		,layout  : null
+		,_layout  : function()
+		{
+			self = PerlTrello.ui;
+			self.layout = new dhtmlXLayoutObject(document.body, self.model.layout.pattern);	
+			self.layout.cells("a").setWidth(250);
+			self.layout.cells("a").setText("PerlTrello");
+			self._status_bar();
+		}
+		,status_bar : null
+		,_status_bar  : function()
+		{
+			self.status_bar = self.layout.attachStatusBar(); // returns status bar object
+			self.status_bar.setText("<div id='status_info'>Initializing PerlTrello</div><div id='user_info'><img src='icons/offline.png' /> Not authorized yet</div><div id='cards_info'>waiting cards stats</div>");
+		}
+		
+		,_setStatus : function(m)
+		{
+			document.getElementById("status_info").innerHTML = m;	
+		}
+		,_setStatusUser : function(m)
+		{
+			document.getElementById("user_info").innerHTML = m;	
+		}
+		,myTrello_layout  : null
+		,_myTrello_layout  : function()
+		{
+			self = PerlTrello.ui;
+			self.myTrello_layout = self.tabbar.cells("myTrello").attachLayout("1C");	
+			
+			
+			self.myTrello_layout.cells("a").setText("Cards assigned to me");
+			
+			//self.myTrello_layout.cells("b").setWidth(500);
+			//self.myTrello_layout.cells("b").setHeight(300);
+			//self.myTrello_layout.cells("b").attachHTMLString("<div id='myTrello_chart_boards_by_cards'  style='width:500px;height:290px;border:1px solid #A4BED4;'></div>");
+			
+			self._myTrello_grid();
+			//self._myTrello_chart_boards_by_cards();
+		}
+		
+		
+		,myTrello_grid  : null
+		,_myTrello_grid  : function()
+		{
+			self = PerlTrello.ui;
+			var gridJsonConf = self.model.grid_cards;
+			self.myTrello_grid = self.myTrello_layout.cells("a").attachGrid(); 
+			self.myTrello_grid.selMultiRows = false;
+			self.myTrello_grid.enableEditEvents(false,true,true);
+			self.myTrello_grid.setHeader( gridJsonConf.headers );
+			self.myTrello_grid.setInitWidths( gridJsonConf.widths );
+			self.myTrello_grid.setColAlign( gridJsonConf.colaligns );
+			self.myTrello_grid.setColTypes( gridJsonConf.coltypes );
+			self.myTrello_grid.setColSorting( gridJsonConf.colsorting );
+			self.myTrello_grid.setDateFormat("%m-%d-%Y")
+			self.myTrello_grid.init();
+			
+			self.updateMyCards();
+			
+			self.myTrello_grid.attachEvent("onRowDblClicked", function(rId,cInd)
+			{
+				//console.log("cards/" + rId + "/actions/comments");
+				//Trello.post("cards/" + rId + "/actions/comments", { text: "Hello from jsfiddle.net!" })
+				return true;
+			}); 
+		}
+		
+		,myTrello_chart_boards_by_cards  : null
+		,_myTrello_chart_boards_by_cards  : function()
+		{
+			self = PerlTrello.ui;
+			self.myTrello_chart_boards_by_cards = new dhtmlXChart({
+				view: "stackedBarH",
+				container: "myTrello_chart_boards_by_cards",
+				value: "#cards#",
+				label: "#cards#",
+				color: "#58dccd",
+				barWidth: 60,
+				tooltip: {
+					template: "#board#"
+				},
+				alpha: 0.8,
+				xAxis: {},
+				yAxis: {
+					lines: true,
+					template: "'#board#"
+				},
+				legend: {
+					values: [{
+						text: "To Do",
+						color: "#58dccd"
+					}, {
+						text: "Doing",
+						color: "#a7ee70"
+					}, {
+						text: "Done",
+						color: "#36abee"
+					}],
+					valign: "top",
+					align: "center",
+					width: 90,
+					layout: "x"
+				}
+			});
+			self.myTrello_chart_boards_by_cards.addSeries({
+				value: "#cards2#",
+				color: "#a7ee70",
+				label: "#cards2#"
+			});
+			self.myTrello_chart_boards_by_cards.addSeries({
+				value: "#cards3#",
+				color: "#36abee",
+				label: "#cards3#"
+			});
+			//console.log(self.myTrello_chart_boards_by_cards);
+			var multiple_dataset = [
+				{ cards:"20", cards2:"35", cards3:"55", board:"Safe Form" },
+				{ cards:"40", cards2:"24", cards3:"40", board:"03" },
+				{ cards:"44", cards2:"20", cards3:"27", board:"04" },
+				{ cards:"23", cards2:"50", cards3:"43", board:"05" },
+				{ cards:"21", cards2:"36", cards3:"31", board:"06" },
+				{ cards:"50", cards2:"40", cards3:"56", board:"07" },
+				{ cards:"30", cards2:"65", cards3:"75", board:"08" },
+				{ cards:"90", cards2:"62", cards3:"55", board:"09" },
+				{ cards:"55", cards2:"40", cards3:"60", board:"10" },
+				{ cards:"72", cards2:"45", cards3:"54", board:"11" }
+			]
+			self.myTrello_chart_boards_by_cards.parse(multiple_dataset, "json");
+		}
+		
+		,tree : null
+		,_tree : function( )
+		{
+			self = PerlTrello.ui;
+			
+			self.tree = self.layout.cells("a").attachTree();
+			self.tree.setSkin( self.model.globalSkin );
+			self.tree.setImagePath( self.model.globalImgPath + "csh_yellowbooks/" );
+			self.tree.enableTreeImages(true);
+			self.tree.enableTreeLines(true);
+			self.tree.enableTextSigns(true);
+			self.tree.loadJSONObject( self.model.tree, function()
+			{
+				
+			});		
+			self.tree.attachEvent("onClick", function(selectedId, oldSelectedId)
+			{
+				if(selectedId !== 'allBoards')
+				{
+					if(selectedId !== 'myTrello')
+					{
+						//console.log(selectedId);
+						//console.log(self.checkIfTabExist(selectedId));
+						if(self.checkIfTabExist(selectedId))
+						{
+							self.tabbar.setTabActive(selectedId);
+						}
+						else
+						{
+							
+							if(  self.tree.getParentId(selectedId) == 'allUsers' )
+							{
+								self._openUser(selectedId);
+							}
+							else
+							{
+								self._openBoard(selectedId);
+							}
+						}
+					}
+					else
+					{
+						self.tabbar.setTabActive(selectedId);
+					}
+					self.tabbarOpenedBoards.push(selectedId);
+				}
+			});
+		}
+		
+		,_openBoard : function(boardID)
+		{
+			self = PerlTrello.ui;
+			self.tabbar.addTab(boardID, self.tree.getItemText(boardID).substring(0, 20), "180px");
+			self._mountBoard( boardID );
+			
+		}
+		
+		,_openUser : function(userID)
+		{
+			self = PerlTrello.ui;
+			self.tabbar.addTab(userID, self.tree.getItemText(userID).substring(0, 20), "180px");
+			self._mountBoard( userID, true );
+			
+		}
+		
+		,boardsStatus : []
+		,boardsLayout : []
+		,_boardsLayout : function( boardID )
+		{
+			self = PerlTrello.ui;
+			self.boardsLayout[ boardID ] = self.tabbar.cells( boardID ).attachLayout( "3E" );	
+			
+			if( typeof self.getBoardById( boardID ).name !== 'undefined' )
+			{
+				self.boardsLayout[ boardID ].cells("a").setText( "All cards for board: " + self.getBoardById( boardID ).name );
+			}
+			else
+			{
+				self.boardsLayout[ boardID ].cells("a").setText( "All cards for user: " + self.tree.getSelectedItemText() );
+			}
+			
+			self.boardsLayout[ boardID ].cells("a").hideHeader();
+			self.boardsLayout[ boardID ].cells("c").hideHeader();
+			
+			//self.boardsStatus[ boardID ].setAutoSize("a;b;c", "a;b");
+			
+			self.boardsStatus[ boardID ] = self.boardsLayout[ boardID ].attachStatusBar(); // returns status bar object
+			self.boardsStatus[ boardID ].setText("<div class='board_info' id='done_info_"+boardID+"'>waiting cards stats</div>\
+				<div class='board_info' id='todo_info_"+boardID+"'>waiting cards stats</div>\
+				<div class='board_info' id='doing_info_"+boardID+"'>waiting cards stats</div>\
+				<div class='board_info' id='nottracked_info_"+boardID+"'>waiting cards stats</div>\
+				<div class='board_info' id='board_info_"+boardID+"'>waiting cards stats</div>\
+				");
+				
+			//self.boardsLayout[ boardID ].cells("b").setHeight(300);
+			//self.boardsLayout[ boardID ].cells("c").setHeight(300);
+			self.boardsLayout[ boardID ].cells("c").setText("select a card above to see it comments");
+			//self.boardsLayout[ boardID ].cells("c").hideHeader();		
+
+			self.boardsLayout[ boardID ].cells("a").progressOn();
+			
+			self.boardsLayout[ boardID ].cells("b").collapse();
+			self.boardsLayout[ boardID ].cells("c").collapse();
+			
+			
+		}
+		
+		,boardsSelectedStatusFilter : []
+		,boardsToolbar : []
+		
+		,_boardsToolbar : function( boardID )
+		{
+			var self = PerlTrello.ui;
+			self.boardsToolbar[ boardID ] = self.boardsLayout[ boardID ].cells("a").attachToolbar( self.model.conf_toolbarBoards );
+			
+			self.boardsToolbar[ boardID ].attachEvent("onClick", function(id)
+			{   
+				
+				
+				if(id == "view")
+				{
+					window.open( self.boardsGrid[ boardID ].cells( self.boardsGrid[ boardID ].getSelectedRowId(),5 ).getTitle() );
+				}
+				
+				else if(id == "nottracked")
+				{
+					self.boardsSelectedStatusFilter[ boardID ] = "nottracked";
+					self.boardsGrid[ boardID ].filterBy( 3, function(data){
+						//return   data.toString().indexOf("alf")!=-1;  // true - show the related row , false - hide the related row
+						
+						if( data.toString().search(/done/i) > -1 )
+						{
+							return false;
+						}
+						else if( data.toString().search(/to do/i) > -1 )
+						{
+							return false;
+						}
+						else if( data.toString().search(/doing/i) > -1 )
+						{
+							return false;
+						}
+						else
+						{
+							return true;
+						}
+						
+					} );
+					self.boardsGrid[ boardID ].filterBy( 0, self.boardsToolbar[ boardID ].getValue("text"), true );
+					self.boardsGrid[ boardID ].filterBy( 1, self.boardsToolbar[ boardID ].getValue("text_desc"), true );
+				}
+				
+				else if(id == "todo")
+				{
+					self.boardsSelectedStatusFilter[ boardID ] = "To Do";
+					
+					self.boardsGrid[ boardID ].filterBy( 3, "To Do" );
+					self.boardsGrid[ boardID ].filterBy( 0, self.boardsToolbar[ boardID ].getValue("text"), true );
+					self.boardsGrid[ boardID ].filterBy( 1, self.boardsToolbar[ boardID ].getValue("text_desc"), true );
+				}
+				
+				else if(id == "doing")
+				{
+					self.boardsSelectedStatusFilter[ boardID ] = "Doing";
+					self.boardsGrid[ boardID ].filterBy( 3, "Doing" );
+					self.boardsGrid[ boardID ].filterBy( 0, self.boardsToolbar[ boardID ].getValue("text"), true );
+					self.boardsGrid[ boardID ].filterBy( 1, self.boardsToolbar[ boardID ].getValue("text_desc"), true );
+				}
+				
+				else if(id == "done")
+				{
+					self.boardsSelectedStatusFilter[ boardID ] = "Done";
+					self.boardsGrid[ boardID ].filterBy( 3, "Done" );
+					self.boardsGrid[ boardID ].filterBy( 0, self.boardsToolbar[ boardID ].getValue("text"), true );
+					self.boardsGrid[ boardID ].filterBy( 1, self.boardsToolbar[ boardID ].getValue("text_desc"), true );
+				}
+				
+				else if(id == "allcards")
+				{
+					self.boardsSelectedStatusFilter[ boardID ] = "";
+					self.boardsGrid[ boardID ].filterBy( 3, "" );
+					self.boardsGrid[ boardID ].filterBy( 0, self.boardsToolbar[ boardID ].getValue("text"), true );
+					self.boardsGrid[ boardID ].filterBy( 1, self.boardsToolbar[ boardID ].getValue("text_desc"), true );
+				}
+				
+				else if(id == "search")
+				{
+					self.boardsGrid[ boardID ].filterBy( 0, self.boardsToolbar[ boardID ].getValue("text") );
+					self.boardsGrid[ boardID ].filterBy( 1, self.boardsToolbar[ boardID ].getValue("text_desc"), true );
+					
+					if( typeof self.boardsSelectedStatusFilter[ boardID ] === 'undefined' )
+					{
+						self.boardsSelectedStatusFilter[ boardID ] = "";
+					}
+					
+					if( self.boardsSelectedStatusFilter[ boardID ] == "nottracked" )
+					{
+						self.boardsGrid[ boardID ].filterBy( 3, function(data)
+						{
+							if( data.toString().search(/done/i) > -1 )
+							{
+								return false;
+							}
+							else if( data.toString().search(/to do/i) > -1 )
+							{
+								return false;
+							}
+							else if( data.toString().search(/doing/i) > -1 )
+							{
+								return false;
+							}
+							else
+							{
+								return true;
+							}
+						}, true );
+					}
+					else
+					{
+						self.boardsGrid[ boardID ].filterBy( 3, self.boardsSelectedStatusFilter[ boardID ], true );
+					}
+				}
+			});	
+		}
+		
+		,boardsGrid : []
+		,_boardsGrid : function( boardID, isUser )
+		{
+			self = PerlTrello.ui;
+			var gridJsonConf = self.model.grid_boards;
+			self.boardsGrid[ boardID ] = self.boardsLayout[ boardID ].cells("a").attachGrid(); 
+			self.boardsGrid[ boardID ].selMultiRows = false;
+			self.boardsGrid[ boardID ].enableEditEvents(false,true,true);
+			self.boardsGrid[ boardID ].setHeader( gridJsonConf.headers );
+			
+			//self.boardsGrid[ boardID ].attachHeader( gridJsonConf.subHeaders );
+			
+			self.boardsGrid[ boardID ].setInitWidths( gridJsonConf.widths );
+			self.boardsGrid[ boardID ].setColAlign( gridJsonConf.colaligns );
+			self.boardsGrid[ boardID ].setColTypes( gridJsonConf.coltypes );
+			self.boardsGrid[ boardID ].setColSorting( gridJsonConf.colsorting );
+			self.boardsGrid[ boardID ].setDateFormat("%D/%M/%Y %H:%i")
+			self.boardsGrid[ boardID ].init();
+			
+			
+			//self.boardsGrid[ boardID ].makeFilter("some_el",0); 
+			//self.boardsGrid[ boardID ].makeFilter("some_el2",3); 
+			
+			if(isUser)
+			{
+				self.updateUserCards( boardID, function(){
+					self.boardsLayout[ boardID ].cells("a").progressOff();
+				} );
+			}
+			else
+			{
+				self.updateBoardCards( boardID, function(){
+					self.boardsLayout[ boardID ].cells("a").progressOff();
+				} );
+			}
+			
+			
+			
+			self.boardsGrid[ boardID ].attachEvent("onRowDblClicked", function(rId,cInd)
+			{
+				//console.log("cards/" + rId + "/actions/comments");
+				//Trello.post("cards/" + rId + "/actions/comments", { text: "Hello from jsfiddle.net!" })
+				//return true;
+			}); 
+			
+			self.boardsGrid[ boardID ].attachEvent("onRowSelect", function( id, ind )
+			{
+				self.boardsLayout[ boardID ].cells("b").setText( self.boardsGrid[ boardID ].cells(id,0).getTitle() );
+				self.boardsLayout[ boardID ].cells("b").attachHTMLString( '<div class="card_description">' + self.boardsGrid[ boardID ].cells(id,1).getTitle().replace(/\n/g, '<br />') + '</div>' );
+				//console.log(self.boardsGrid[ boardID ].cells(id,1).getTitle().replace(/\n/g, '<br />'));
+				self.boardsLayout[ boardID ].cells("b").expand();
+				self.boardsLayout[ boardID ].cells("c").expand();
+				
+				
+				self.boardsLayout[ boardID ].cells("a").setHeight(150);
+				self.boardsLayout[ boardID ].cells("b").setHeight(70);
+				self.boardsLayout[ boardID ].cells("c").setHeight(300);
+				
+				self.boardsToolbar[ boardID ].enableItem("view");
+				
+				self._commentsLayout( boardID );
+				self._commentsGrid( boardID, id );
+				
+				
+				
+				
+				
+			});
+		}
+		
+		,commentsStatus : []
+		,commentsLayout : []
+		,_commentsLayout : function( boardID )
+		{
+			self = PerlTrello.ui;
+			self.commentsLayout[ boardID ] = self.boardsLayout[ boardID ].cells("c").attachLayout( "3U" );	
+			
+			console.log(self.boardsGrid[ boardID ].getSelectedRowId());
+			
+			self.commentsLayout[ boardID ].cells("a").setText( "Comments for card: " + self.boardsGrid[ boardID ].cells( self.boardsGrid[ boardID ].getSelectedRowId(), 0 ).getTitle() );
+			self.commentsLayout[ boardID ].cells("a").hideHeader();
+			self.commentsLayout[ boardID ].cells("b").setText( "Post your comment" );
+			self.commentsLayout[ boardID ].cells("b").hideHeader( );
+			self.commentsLayout[ boardID ].cells("b").setWidth( 500 );
+			self.commentsLayout[ boardID ].cells("b").attachHTMLString( '<div contenteditable="true" id="comment_input_'+self.boardsGrid[ boardID ].getSelectedRowId()+'" class="comment"></div>' );
+			self.commentsLayout[ boardID ].cells("c").collapse();
+			
+			self._commentToolbar( boardID );
+			
+			/*self.commentsStatus[ boardID ] = self.commentsLayout[ boardID ].attachStatusBar(); // returns status bar object
+			self.commentsStatus[ boardID ].setText("<div class='board_info' id='done_info_"+boardID+"'>waiting cards stats</div>\
+				<div class='board_info' id='todo_info_"+boardID+"'>waiting cards stats</div>\
+				<div class='board_info' id='doing_info_"+boardID+"'>waiting cards stats</div>\
+				<div class='board_info' id='nottracked_info_"+boardID+"'>waiting cards stats</div>\
+				<div class='board_info' id='board_info_"+boardID+"'>waiting cards stats</div>\
+				");
+			*/	
+				
+
+			//self.commentsLayout[ boardID ].cells("a").progressOn();
+			//self.commentsLayout[ boardID ].cells("b").collapse();
+			
+			
+		}
+		
+		,markdownEditor : []
+		,commentsGrid : []
+		,_commentsGrid : function( boardID, cardID )
+		{
+			self = PerlTrello.ui;
+			var gridJsonConf = self.model.grid_comments;
+			self.commentsGrid[ boardID ] = self.commentsLayout[ boardID ].cells("a").attachGrid(); 
+			self.commentsGrid[ boardID ].selMultiRows = false;
+			self.commentsGrid[ boardID ].enableEditEvents(false,true,true);
+			self.commentsGrid[ boardID ].setHeader( gridJsonConf.headers );
+			self.commentsGrid[ boardID ].setInitWidths( gridJsonConf.widths );
+			self.commentsGrid[ boardID ].setColAlign( gridJsonConf.colaligns );
+			self.commentsGrid[ boardID ].setColTypes( gridJsonConf.coltypes );
+			self.commentsGrid[ boardID ].setColSorting( gridJsonConf.colsorting );
+			self.commentsGrid[ boardID ].setDateFormat("%D/%M/%Y %H:%i")
+			self.commentsGrid[ boardID ].init();
+			
+			
+			self.updateCardComments( boardID, cardID, function(){
+					//self.commentsLayout[ boardID ].cells("a").progressOff();
+			} );
+			
+			
+			
+			self.commentsGrid[ boardID ].attachEvent("onRowDblClicked", function(rId,cInd)
+			{
+				//console.log("cards/" + rId + "/actions/comments");
+				//Trello.post("cards/" + rId + "/actions/comments", { text: "Hello from jsfiddle.net!" })
+				//return true;
+			}); 
+			
+			self.commentsGrid[ boardID ].attachEvent("onRowSelect", function( id, ind )
+			{
+				self.commentsLayout[ boardID ].cells("c").setText( self.commentsGrid[ boardID ].cells(id,1).getTitle() + " said on " +self.commentsGrid[ boardID ].cells(id,2).getTitle() );
+				self.boardsLayout[ boardID ].cells("b").collapse();
+				//self.commentsLayout[ boardID ].cells("b").setHeight(150);
+				self.commentsLayout[ boardID ].cells("c").expand();
+				self.commentsLayout[ boardID ].cells("c").setHeight(330);
+				self.commentsLayout[ boardID ].cells("c").attachHTMLString( '<div class="card_description"><div style="height:300px" id="card_comment_'+id+'">'+self.commentsGrid[ boardID ].cells(id,0).getTitle()+'</div></div>' );
+				
+				
+				
+				//console.log(self.commentsGrid[ boardID ].cells(id,0).getTitle());
+				
+				self.markdownEditor[ id ] = new EpicEditor({
+				  container: 'card_comment_'+id,
+				  file: {
+					name: 'card_comment_'+id,
+					defaultContent: self.commentsGrid[ boardID ].cells(id,0).getTitle(),
+					autoSave: 100
+				  }
+				});
+				self.markdownEditor[ id ].load();
+				self.markdownEditor[ id ].preview();
+				self.markdownEditor[ id ].reflow();
+				
+				//console.log(self.commentsGrid[ boardID ].cells(id,1).getTitle().replace(/\n/g, '<br />'));
+				
+			});
+		}
+		
+		
+		
+		
+		
+		,_mountBoard : function( boardID, isUser )
+		{
+			//console.log(boardID);
+			self = PerlTrello.ui;
+			
+			self._boardsLayout( boardID );
+			
+			isUser = isUser || false;
+			
+			self._boardsGrid( boardID, isUser );
+			
+			self._boardsToolbar( boardID );
+			
+			
+			
+			
+			self.tabbar.setTabActive( boardID );	
+			
+		}
+		
+		
+		,commentToolbar : []
+		,_commentToolbar : function( boardID )
+		{
+			var self = PerlTrello.ui;
+			self.commentToolbar[ boardID ] = self.commentsLayout[ boardID ].cells("b").attachToolbar( self.model.conf_toolbarComment );
+			
+			self.commentToolbar[ boardID ].attachEvent("onClick", function(id)
+			{   
+				if(id == "post")
+				{
+					var cardID = self.boardsGrid[ boardID ].getSelectedRowId();
+					var comment_value = document.getElementById( 'comment_input_'+cardID ).innerText;
+					if(comment_value == "")
+					{
+						dhtmlx.message( {type : "error", text : "Type a comment before posting"} );
+						return;
+					}
+					
+					self.commentsLayout[ boardID ].cells("a").progressOn();
+					self.commentsLayout[ boardID ].cells("b").progressOn();
+					
+					//console.log('comment_input_'+self.boardsGrid[ boardID ].getSelectedRowId());
+					//console.log(comment_value);
+					Trello.post("cards/" + self.boardsGrid[ boardID ].getSelectedRowId() + "/actions/comments", { text: comment_value }, function(r)
+					{
+						self.updateCardComments( boardID, cardID, function(){
+								document.getElementById( 'comment_input_'+cardID ).innerHTML = "";
+								self.commentsLayout[ boardID ].cells("a").progressOff();
+								self.commentsLayout[ boardID ].cells("b").progressOff();
+						} );
+						console.log(r);
+					});
+				}
+				else if(id == "delete")
+				{
+					
+				}
+			});		
+		}
+		
+		
+		,Boards : []
+		,Lists : []
+		,checkIfTabExist : function(k) {
+			//console.log(k);
+			self = PerlTrello.ui;
+			for(var p = 0; p < self.tabbarOpenedBoards.length; p++)
+			{
+				if(self.tabbarOpenedBoards[p] == k)
+				{
+					//console.log(k);
+					return true;
+				}
+			}
+			return false;
+		}
+		,getBoards : function( callBack )
+		{
+			self = PerlTrello.ui;
+			self._setStatus("Getting boards");
+			Trello.get("organizations/cairs/boards?lists=all", function(boards) 
+			{
+				self.model.tree.item[0].item = [];
+				boards.forEach( function(board, index, array)
+				{					
+					//console.log(board.id);
+					
+					
+					self.Lists[ board.id ] = board.lists;
+					
+					//console.log(self.Lists[ board.id ]);
+					
+					self.Boards.push( { id : board.id, name : board.name, lists : board.lists } );
+					self.model.tree.item[0].item.push( { id : board.id, text: board.name } );
+					
+				});
+				
+				self._setStatus("Boards loaded on left panel");
+				
+				if(callBack)
+				{
+					callBack();
+				}
+			});	
+		}
+		,Members : []
+		,getUsers : function( callBack )
+		{
+			self = PerlTrello.ui;
+			self._setStatus("Getting users");
+			Trello.get("organizations/cairs/members", function(members) 
+			{
+				self.model.tree.item[2].item = [];
+				members.forEach( function(member, index, array)
+				{					
+					
+					
+					//console.log(self.Lists[ member.id ]);
+					
+					self.Members.push( { id : member.username, name : member.fullName } );
+					self.model.tree.item[2].item.push( { id : member.username, text: member.fullName } );
+					
+				});
+				
+				self._setStatus("members loaded on left panel");
+				
+				if(callBack)
+				{
+					callBack();
+				}
+			});	
+		}
+		,getBoardById : function( boardId )
+		{
+			self = PerlTrello.ui;
+			for(var x = 0; x < self.Boards.length; x++)
+			{
+				var board = self.Boards[x];
+				if(board.id == boardId)
+				{
+					return board;
+				}
+			}
+			return false;
+		}
+		,getListById : function( boardID, listID )
+		{
+			try
+			{
+				self = PerlTrello.ui;
+				//console.log(listID);
+				//console.log(boardID);
+				//console.log(self.Lists[boardID]);
+				
+				for(var x = 0; x < self.Lists[boardID].length; x++)
+				{
+					var list = self.Lists[boardID][x];
+					//console.log(list);
+					if(list.id == listID)
+					{
+						return list;
+					}
+				}
+				return {name:""};
+			}
+			catch(e)
+			{
+				return  {name:""};
+			}
+		}
+		,updateMyCards : function( callBack )
+		{
+			self = PerlTrello.ui;
+			self.myTrello_layout.cells("a").progressOn();
+			Trello.get("members/me/cards", function(cards) 
+			{
+				var assignedCards = 0;
+				cards.forEach( function(card, index, array)
+				{					
+					//console.log("id list " + card.idList);
+					//console.log(self.getBoardById(card.idBoard));
+					self.myTrello_grid.addRow(card.id,[card.name, self.getBoardById(card.idBoard).name]);
+					assignedCards++;
+				});
+				
+				document.getElementById("cards_info").innerHTML = "Cards assigned to me: " + assignedCards;
+				
+				if( callBack )
+					callBack();
+				
+				self._setStatus("Cards assigned to me was loaded");
+				self.myTrello_layout.cells("a").progressOff();
+			});	
+		}
+		
+		,updateBoardCards : function( boardID, callBack )
+		{
+			self = PerlTrello.ui;
+			//self.myTrello_layout.cells("a").progressOn();
+			Trello.get("boards/"+boardID+"/cards", function(cards) 
+			{
+				var totalCards = 0;
+				var totalDone = 0;
+				var totalTodo = 0;
+				var totalDoing = 0;
+				var totalNotTracked = 0;
+				cards.forEach( function(card, index, array)
+				{					
+					//console.log("id list " + card.idList);
+					//console.log(self.getBoardById(card.idBoard));
+					var cDate = new Date(card.dateLastActivity);
+					
+					cDate = cDate.getDate() + "-" + (cDate.getMonth() + 1) + "-" + cDate.getFullYear() + " " + cDate.getHours() + ":" + cDate.getMinutes();
+					
+					//console.log(card.idList);
+					//console.log(card.name);
+					
+					var bname = self.getListById( boardID, card.idList).name;
+					
+					
+					if( self.getListById( boardID, card.idList).name.search(/done/i) > -1 )
+					{
+						totalDone ++;
+						bname = "<img src='icons/done.png' title='"+self.getListById( boardID, card.idList).name+"' />";
+					}
+					else if( self.getListById( boardID, card.idList).name.search(/to do/i) > -1 )
+					{
+						totalTodo ++;
+						bname = "<img src='icons/todo.png' title='"+self.getListById( boardID, card.idList).name+"' />";
+					}
+					else if( self.getListById( boardID, card.idList).name.search(/doing/i) > -1 )
+					{
+						totalDoing ++;
+						bname = "<img src='icons/doing.png' title='"+self.getListById( boardID, card.idList).name+"' />";
+					}
+					else
+					{
+						totalNotTracked ++;
+						bname = "<img src='icons/notes.png' title='"+self.getListById( boardID, card.idList).name+"' />";
+					}
+					
+					self.boardsGrid[ boardID ].addRow(card.id,[CAIRS.Encoder.htmlEncode(card.name), CAIRS.Encoder.htmlEncode(card.desc), cDate, self.getListById( boardID, card.idList).name, bname, "open at trello^" + card.shortUrl]);
+					//console.log(self.getListById( boardID, card.idList).name.search(/Done/i));
+					
+					//console.log(card.shortUrl);
+					//console.log(card.desc);
+					totalCards++;
+				});
+				
+				document.getElementById("board_info_"+boardID).innerHTML = "<img src='icons/cards.png' /> Cards on this board: " + totalCards;
+				document.getElementById("done_info_"+boardID).innerHTML = "<img src='icons/done.png' /> Cards done: " + totalDone;
+				document.getElementById("todo_info_"+boardID).innerHTML = "<img src='icons/todo.png' /> Cards to do: " + totalTodo;
+				document.getElementById("doing_info_"+boardID).innerHTML = "<img src='icons/doing.png' /> Cards doing: " + totalDoing;
+				document.getElementById("nottracked_info_"+boardID).innerHTML = "<img src='icons/notes.png' /> Not Tracked: " + totalNotTracked;
+				
+				if( callBack )
+					callBack();
+				
+				self._setStatus("Cards from "+self.getBoardById(boardID).name+" was loaded");
+				
+			});	
+		}
+		
+		,updateCardsComments : function( boardID, callBack )
+		{
+			self = PerlTrello.ui;
+			//self.myTrello_layout.cells("a").progressOn();
+			Trello.get("boards/"+boardID+"/cards", function(cards) 
+			{
+				var totalCards = 0;
+				var totalDone = 0;
+				var totalTodo = 0;
+				var totalDoing = 0;
+				var totalNotTracked = 0;
+				cards.forEach( function(card, index, array)
+				{					
+					//console.log("id list " + card.idList);
+					//console.log(self.getBoardById(card.idBoard));
+					var cDate = new Date(card.dateLastActivity);
+					
+					cDate = cDate.getDate() + "-" + (cDate.getMonth() + 1) + "-" + cDate.getFullYear() + " " + cDate.getHours() + ":" + cDate.getMinutes();
+					
+					//console.log(card.idList);
+					//console.log(card.name);
+					
+					var bname = self.getListById( boardID, card.idList).name;
+					
+					
+					if( self.getListById( boardID, card.idList).name.search(/done/i) > -1 )
+					{
+						totalDone ++;
+						bname = "<img src='icons/done.png' title='"+self.getListById( boardID, card.idList).name+"' />";
+					}
+					else if( self.getListById( boardID, card.idList).name.search(/to do/i) > -1 )
+					{
+						totalTodo ++;
+						bname = "<img src='icons/todo.png' title='"+self.getListById( boardID, card.idList).name+"' />";
+					}
+					else if( self.getListById( boardID, card.idList).name.search(/doing/i) > -1 )
+					{
+						totalDoing ++;
+						bname = "<img src='icons/doing.png' title='"+self.getListById( boardID, card.idList).name+"' />";
+					}
+					else
+					{
+						totalNotTracked ++;
+						bname = "<img src='icons/notes.png' title='"+self.getListById( boardID, card.idList).name+"' />";
+					}
+					
+					self.boardsGrid[ boardID ].addRow(card.id,[CAIRS.Encoder.htmlEncode(card.name), CAIRS.Encoder.htmlEncode(card.desc), cDate, self.getListById( boardID, card.idList).name, bname, "open at trello^" + card.shortUrl]);
+					//console.log(self.getListById( boardID, card.idList).name.search(/Done/i));
+					
+					//console.log(card.shortUrl);
+					//console.log(card.desc);
+					totalCards++;
+				});
+				
+				document.getElementById("board_info_"+boardID).innerHTML = "<img src='icons/cards.png' /> Cards on this board: " + totalCards;
+				document.getElementById("done_info_"+boardID).innerHTML = "<img src='icons/done.png' /> Cards done: " + totalDone;
+				document.getElementById("todo_info_"+boardID).innerHTML = "<img src='icons/todo.png' /> Cards to do: " + totalTodo;
+				document.getElementById("doing_info_"+boardID).innerHTML = "<img src='icons/doing.png' /> Cards doing: " + totalDoing;
+				document.getElementById("nottracked_info_"+boardID).innerHTML = "<img src='icons/notes.png' /> Not Tracked: " + totalNotTracked;
+				
+				if( callBack )
+					callBack();
+				
+				self._setStatus("Cards from "+self.getBoardById(boardID).name+" was loaded");
+				
+			});	
+		}
+		
+		,updateUserCards : function( userID, callBack )
+		{
+			self = PerlTrello.ui;
+			//self.myTrello_layout.cells("a").progressOn();
+			//members/[idMember or username]/cards
+			//console.log("members/"+userID+"/cards");
+			Trello.get("members/"+userID+"/cards", function(cards) 
+			{
+				var totalCards = 0;
+				var totalDone = 0;
+				var totalTodo = 0;
+				var totalDoing = 0;
+				var totalNotTracked = 0;
+				cards.forEach( function(card, index, array)
+				{					
+					//console.log("id list " + card.idList);
+					//console.log(self.getBoardById(card.idBoard));
+					var cDate = new Date(card.dateLastActivity);
+					
+					cDate = cDate.getDate() + "-" + (cDate.getMonth() + 1) + "-" + cDate.getFullYear() + " " + cDate.getHours() + ":" + cDate.getMinutes();
+					
+					//console.log(card.idList);
+					//console.log(card.name);
+					
+					//console.log(card.idBoard);
+					//console.log(card.idList);
+					
+					var bname = self.getListById( card.idBoard, card.idList).name;
+					
+					
+					if( self.getListById( card.idBoard, card.idList).name.search(/done/i) > -1 )
+					{
+						totalDone ++;
+						bname = "<img src='icons/done.png' title='"+self.getListById( card.idBoard, card.idList).name+"' />";
+					}
+					else if( self.getListById( card.idBoard, card.idList).name.search(/to do/i) > -1 )
+					{
+						totalTodo ++;
+						bname = "<img src='icons/todo.png' title='"+self.getListById( card.idBoard, card.idList).name+"' />";
+					}
+					else if( self.getListById( card.idBoard, card.idList).name.search(/doing/i) > -1 )
+					{
+						totalDoing ++;
+						bname = "<img src='icons/doing.png' title='"+self.getListById( card.idBoard, card.idList).name+"' />";
+					}
+					else
+					{
+						totalNotTracked ++;
+						bname = "<img src='icons/notes.png' title='"+self.getListById( card.idBoard, card.idList).name+"' />";
+					}
+					
+					self.boardsGrid[ userID ].addRow(card.id,[CAIRS.Encoder.htmlEncode(card.name), CAIRS.Encoder.htmlEncode(card.desc), cDate, self.getListById( card.idBoard, card.idList).name, bname, "open at trello^" + card.shortUrl]);
+					//console.log(self.getListById( card.idBoard, card.idList));
+					//console.log(card.idBoard);
+					
+					//console.log(card.shortUrl);
+					//console.log(card.desc);
+					totalCards++;
+				});
+				
+				document.getElementById("board_info_"+userID).innerHTML = "<img src='icons/cards.png' /> Cards on this board: " + totalCards;
+				document.getElementById("done_info_"+userID).innerHTML = "<img src='icons/done.png' /> Cards done: " + totalDone;
+				document.getElementById("todo_info_"+userID).innerHTML = "<img src='icons/todo.png' /> Cards to do: " + totalTodo;
+				document.getElementById("doing_info_"+userID).innerHTML = "<img src='icons/doing.png' /> Cards doing: " + totalDoing;
+				document.getElementById("nottracked_info_"+userID).innerHTML = "<img src='icons/notes.png' /> Not Tracked: " + totalNotTracked;
+				
+				if( callBack )
+					callBack();
+				
+				self._setStatus("Cards from "+self.getBoardById(userID).name+" was loaded");
+				
+			});	
+		}
+		
+		
+		,updateCardComments : function( boardID, cardID, callBack )
+		{
+			self = PerlTrello.ui;
+			
+			
+			Trello.get("cards/"+cardID+"/actions", function(actions) 
+			{
+				
+				self.commentsGrid[ boardID ].clearAll();
+				
+				actions.forEach( function(action, index, array)
+				{					
+					console.log(action);
+					//console.log(action.type);
+					if( action.type == 'commentCard' )
+					{
+						//console.log(action.data.text);
+						var cDate = new Date(action.date);
+						cDate = cDate.getDate() + "-" + (cDate.getMonth() + 1) + "-" + cDate.getFullYear() + " " + cDate.getHours() + ":" + cDate.getMinutes();
+						self.commentsGrid[ boardID ].addRow(action.id,[ CAIRS.Encoder.htmlEncode(action.data.text), action.memberCreator.fullName, cDate]);
+					}
+				});
+				
+				if( callBack )
+					callBack();
+			});	
+		}
+		
+		,tabbarOpenedBoards : []
+		,tabbar  : null
+		,_tabbar  : function()
+		{
+			self = PerlTrello.ui;
+			self.tabbar = this.layout.cells("b").attachTabbar();
+			self.tabbar.setImagePath(self.model.globalImgPath);
+			self.tabbar.setSkin(self.model.globalSkin);
+			
+			self.tabbar.enableTabCloseButton(true);
+			
+			self.tabbar.addTab("myTrello", "My Cards", "150px");
+			//self.tabbar.addTab("a2", "DataStore", "130px");
+			//self.tabbar.addTab("a3", "Toolbars", "120px");
+			//self.tabbar.addTab("a4", "Forms", "120px");
+
+			
+			//self.tabbar.addTab("a5", "Forms", "150px");
+			
+			//self.tabbar.setContentHTML("myTrello", "t1");
+			//self.tabbar.setContentHTML("a2", "<br/>The content can be set as <b>HTML</b> node or as <b>HTML</b> text.");
+			//self.tabbar.setContentHTML("a3", "<br/>The content can be set as <b>HTML</b> node or as <b>HTML</b> text.");
+			//self.tabbar.setContentHTML("a4", "<br/>The content can be set as <b>HTML</b> node or as <b>HTML</b> text.");
+			
+			
+			
+			self.tabbar.enableAutoSize(false,true);
+			
+			
+			
+			self.tabbar.enableAutoReSize(true);
+			
+			self.tabbar.enableScroll(true);
+			
+			
+			self._myTrello_layout();
+			
+			self.tabbar.setTabActive("myTrello");
+		}
+		
+		
+		,_progressOn : function(  ){
+			var self = PerlTrello.ui;
+			//self.windows[ uid ].progressOn();
+			//self.layout[ uid ].cells("a").progressOn();
+			self.layout.progressOn();
+		}
+		
+		,_progressOff : function(  ){
+			var self = PerlTrello.ui;
+			//self.windows[ uid ].progressOff();
+			//self.layout[ uid ].cells("a").progressOff();
+			self.layout.progressOff();
+		}
+		
+		,start : function()
+		{
+			var self = PerlTrello.ui;
+			
+			CAIRS.init();
+			
+			window.dhx_globalImgPath = self.model.globalImgPath;
+			//self.model.globalImgPath = configuration.dhtmlx_codebase_path + "imgs/";
+		
+			self.model.conf_toolbarBoards.icon_path =  "icons/";
+			self.model.conf_toolbarComment.icon_path =  "icons/";
+			
+			PerlTrello.ui._layout();
+			self._progressOn();
+			
+			//self.status_bar.setText("Authorizing PerlTrello");
+			
+			self._setStatus("Authorizing PerlTrello");
+			
+			Trello.authorize({
+				type: "redirect",
+				name : "Perl Trello",
+				success: PerlTrello.onAuthorize,
+				scope: { write: true, read: true }
+			});
+		}
+	}
+	
+	,init : function( model )
+	{
+		var self = PerlTrello.ui;
+		self.model = model;
+	}
+};
+try
+{
+	PerlTrello.init( PerlTrello_Model );	
+}
+catch(e)
+{
+	
+}
+
+
+
+window.onload = function ()
+{
+	PerlTrello.ui.start();
+}
+
+
+</script>
+</head>
+
+<body>
+<div id="t1" style="display:none">
+    <div id="loggedin">
+        <div id="header">
+            Logged in to as <span id="fullName"></span> 
+            <a id="disconnect" href="#">Log Out</a>
+        </div>
+        <div id="output"></div>
+    </div>  
+</div>
+</body>
+</html>
